@@ -1,0 +1,46 @@
+name: CI - Build Application
+on:
+  push:
+    branches:
+      - '**'
+    paths-ignore:
+      - 'LICENSE'
+      - '**.md'
+  pull_request:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+permissions: write-all
+
+jobs:
+  build-mac:
+    name: Build for macOS (Universal)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up env.APP_CONF to Release
+        if: github.event_name == 'release'
+        run: |
+          echo "APP_CONF=Release" >> $GITHUB_ENV
+      - name: Build for macOS (Universal)
+        shell: bash
+        run: |
+          xcodebuild -project 'Sentry.xcodeproj' -scheme 'Sentry' -configuration '${{ env.APP_CONF }}' -destination 'platform=macOS' build  -derivedDataPath 'build' CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+      - name: Create DMG
+        shell: bash
+        run: |
+          hdiutil create -volname "Sentry" -srcfolder "build/Build/Products/${{ env.APP_CONF }}/Sentry.app" -ov -format UDZO "Sentry.dmg"
+
+      - name: Upload DMG Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sentry
+          path: Sentry.dmg
+      - name: Upload DMG to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Sentry.dmg
